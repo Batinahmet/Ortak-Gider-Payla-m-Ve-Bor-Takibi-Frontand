@@ -30,3 +30,7 @@ button:disabled { opacity: .6; cursor: default; }
 .pos { color: var(--pos); } .neg { color: var(--neg); }
 .error { color: var(--neg); }
 .top { display: flex; justify-content: space-between; align-items: center; }
+.top nav { display: flex; align-items: center; gap: 12px; font-size: 14px; flex-wrap: wrap; }
+.badge { font-size: 11px; padding: 2px 8px; border-radius: 99px; background: var(--accent); color: #fff; vertical-align: middle; }
+.check { display: flex; align-items: center; gap: 6px; font-size: 14px; color: var(--muted); margin-bottom: 8px; }
+.check input { width: auto; margin: 0; }

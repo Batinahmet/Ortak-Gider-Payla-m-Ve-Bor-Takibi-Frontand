@@ -18,3 +18,10 @@ Backend adresi `config.js` içindeki `API_URL` ile ayarlanır. Gizli anahtar (AP
 ## Ekranlar
 
 Giriş/kayıt, gruplarım ve davet koduyla katılma, grup sayfası (harcama ekleme, fişten ekleme, "kim kime ne kadar", bakiyeler, geçmiş, etkinlik akışı, yapay zeka borç özeti).
+
+## Kimlik doğrulama ekranları (Hafta 5)
+
+- **Giriş / kayıt:** şifreyi göster seçeneği, hatalı girişte genel mesaj, çok denemede kilit mesajı (429), oturum süresi dolunca "Oturum süren doldu" bildirimi.
+- **Hesabım (`#/hesap`):** e-posta ve rol bilgisi, ad değiştirme, şifre değiştirme (mevcut şifre istenir, diğer oturumlar kapanır), çıkış.
+- **Yönetim (`#/admin`):** kullanıcı listesi ve rol değiştirme. Bağlantı yalnızca yöneticide görünür, ama asıl koruma sunucudadır: yönetici olmayan biri adresi elle açsa bile sunucu 403 döner ve ekran hata mesajı gösterir.
+- Oturum belirteci `localStorage` içinde tutulur. Kullanıcıdan gelen tüm metinler `esc()` ile kaçırılarak basılır (XSS önlemi).

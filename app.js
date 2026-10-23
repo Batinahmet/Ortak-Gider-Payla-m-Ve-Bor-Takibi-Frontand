@@ -15,6 +15,7 @@ const store = {
 let token = store.get('token');
 let me = null;
 let aiAvailable = false;
+let notice = ''; // giriş ekranında bir kez gösterilen bilgi mesajı
 
 async function api(method, path, body) {
   const res = await fetch(API + path, {
@@ -23,7 +24,7 @@ async function api(method, path, body) {
     body: body ? JSON.stringify(body) : undefined,
   });
   const data = await res.json().catch(() => ({}));
-  if (res.status === 401 && token) { token = null; me = null; store.del('token'); }
+  if (res.status === 401 && token) { token = null; me = null; store.del('token'); notice = 'Oturum süren doldu, lütfen tekrar giriş yap.'; }
   if (!res.ok) throw new Error(data.error || `Hata (${res.status})`);
   return data;
 }
@@ -36,9 +37,12 @@ function authView(mode = 'login') {
   app.innerHTML = `<h1>Ortak Gider</h1><div class="card"><h2>${reg ? 'Kayıt ol' : 'Giriş yap'}</h2>
     <form id="f">${reg ? '<input name="name" placeholder="Adın" required maxlength="50">' : ''}
     <input name="email" type="email" placeholder="E-posta" required>
-    <input name="password" type="password" placeholder="Şifre (en az 8 karakter)" required minlength="8">
+    <input name="password" id="pw" type="password" placeholder="Şifre (en az 8 karakter)" required minlength="8" maxlength="128" autocomplete="${reg ? 'new-password' : 'current-password'}">
+    <label class="check"><input type="checkbox" id="show"> Şifreyi göster</label>
     <button>${reg ? 'Kayıt ol' : 'Giriş yap'}</button><div id="err"></div></form>
     <button class="ghost" id="sw">${reg ? 'Hesabım var' : 'Yeni hesap oluştur'}</button></div>`;
+  if (notice) { const n = $('#err'); n.textContent = notice; n.className = 'muted'; notice = ''; }
+  $('#show').onchange = (e) => { $('#pw').type = e.target.checked ? 'text' : 'password'; };
   $('#sw').onclick = () => authView(reg ? 'login' : 'register');
   $('#f').onsubmit = async (e) => {
     e.preventDefault();
@@ -51,16 +55,71 @@ function authView(mode = 'login') {
   };
 }
 
+// ---------- Üst çubuk (rol bilinçli) ----------
+const logout = async () => { try { await api('POST', '/auth/logout'); } catch { /* yoksay */ } token = null; me = null; store.del('token'); location.hash = ''; route(); };
+// Yönetici bağlantısı sadece görünürlük içindir; asıl yetki kontrolü sunucudadır (403).
+const topBar = () => `<div class="top"><h1>Merhaba ${esc(me.name)}${me.role === 'admin' ? ' <span class="badge">yönetici</span>' : ''}</h1>
+  <nav><a href="#/">Gruplar</a> <a href="#/hesap">Hesabım</a>${me.role === 'admin' ? ' <a href="#/admin">Yönetim</a>' : ''} <button class="ghost small" id="out">Çıkış</button></nav></div>`;
+const bindTopBar = () => { $('#out').onclick = logout; };
+
+// ---------- Hesabım ----------
+function accountView() {
+  app.innerHTML = `${topBar()}
+    <div class="card"><h2>Profil</h2>
+      <p class="muted">${esc(me.email)} · rol: ${esc(me.role === 'admin' ? 'yönetici' : 'kullanıcı')}</p>
+      <form id="nf"><input name="name" value="${esc(me.name)}" required maxlength="50"><button>Adı kaydet</button><div id="nerr"></div></form></div>
+    <div class="card"><h2>Şifre değiştir</h2>
+      <form id="pf"><input name="currentPassword" id="cp" type="password" placeholder="Mevcut şifre" required autocomplete="current-password">
+      <input name="newPassword" id="np" type="password" placeholder="Yeni şifre (en az 8 karakter)" required minlength="8" maxlength="128" autocomplete="new-password">
+      <label class="check"><input type="checkbox" id="show"> Şifreleri göster</label>
+      <button>Şifreyi değiştir</button><div id="perr"></div></form>
+      <p class="muted">Şifre değişince diğer cihazlardaki oturumlar kapanır.</p></div>`;
+  bindTopBar();
+  $('#show').onchange = (e) => { const t = e.target.checked ? 'text' : 'password'; $('#cp').type = t; $('#np').type = t; };
+  $('#nf').onsubmit = async (e) => {
+    e.preventDefault();
+    try { me = (await api('PATCH', '/me', { name: new FormData(e.target).get('name') })).user; accountView(); const ok = $('#nerr'); ok.textContent = 'Kaydedildi'; ok.className = 'pos'; }
+    catch (err) { showError($('#nerr'), err); }
+  };
+  $('#pf').onsubmit = async (e) => {
+    e.preventDefault();
+    try {
+      const r = await api('POST', '/me/password', Object.fromEntries(new FormData(e.target)));
+      e.target.reset();
+      const ok = $('#perr'); ok.textContent = `Şifre değişti${r.closedSessions ? ` (${r.closedSessions} diğer oturum kapatıldı)` : ''}`; ok.className = 'pos';
+    } catch (err) { showError($('#perr'), err); }
+  };
+}
+
+// ---------- Yönetim (sadece admin) ----------
+async function adminView() {
+  // Rol kontrolü için kullanıcıya güvenilmez: istek her zaman gönderilir, sunucu yetkisizse 403 döner.
+  let users;
+  try { users = (await api('GET', '/admin/users')).users; }
+  catch (e) { app.innerHTML = `${topBar()}<div class="card"><p class="error">${esc(e.message)}</p></div>`; bindTopBar(); return; }
+  app.innerHTML = `${topBar()}<div class="card"><h2>Kullanıcılar (${users.length})</h2>${users.map((u) => `<div class="row">
+    <span>${esc(u.name)}<br><span class="muted">${esc(u.email)} · ${u.groupCount} grup</span></span>
+    <select data-uid="${esc(u.id)}" ${u.id === me.id ? 'disabled' : ''}><option value="user" ${u.role === 'user' ? 'selected' : ''}>kullanıcı</option><option value="admin" ${u.role === 'admin' ? 'selected' : ''}>yönetici</option></select></div>`).join('')}
+    <div id="aerr"></div></div>`;
+  bindTopBar();
+  app.querySelectorAll('select[data-uid]').forEach((sel) => {
+    sel.onchange = async () => {
+      try { await api('PATCH', `/admin/users/${sel.dataset.uid}/role`, { role: sel.value }); const ok = $('#aerr'); ok.textContent = 'Rol güncellendi'; ok.className = 'pos'; }
+      catch (err) { showError($('#aerr'), err); adminView(); }
+    };
+  });
+}
+
 // ---------- Ana sayfa ----------
 async function homeView() {
   const { groups } = await api('GET', '/groups');
-  app.innerHTML = `<div class="top"><h1>Merhaba ${esc(me.name)}</h1><button class="ghost small" id="out">Çıkış</button></div>
+  app.innerHTML = `${topBar()}
     <div class="card"><h2>Yeni grup</h2><input id="gn" placeholder="Grup adı (ör. Ev arkadaşları)" maxlength="60"><button id="mk">Grup oluştur</button></div>
     <div class="card"><h2>Davet koduyla katıl</h2><input id="code" placeholder="Davet kodu" maxlength="20"><button class="ghost" id="jn">Katıl</button><div id="err"></div></div>
     <div class="card"><h2>Gruplarım</h2>${groups.length
       ? groups.map((g) => `<div class="row"><span>${esc(g.name)}</span><a href="#/g/${esc(g.id)}">Aç</a></div>`).join('')
       : '<p class="muted">Henüz grubun yok.</p>'}</div>`;
-  $('#out').onclick = async () => { try { await api('POST', '/auth/logout'); } catch { /* yoksay */ } token = null; store.del('token'); route(); };
+  bindTopBar();
   $('#mk').onclick = async () => {
     const name = $('#gn').value.trim();
     if (!name) return;
@@ -233,7 +292,10 @@ async function route() {
       try { const g = await api('POST', '/groups/join', { code: pending }); location.hash = `#/g/${g.id}`; return; } catch { /* kod geçersizse ana sayfaya düş */ }
     }
     const m = location.hash.match(/^#\/g\/(\w+)/);
-    if (m) await groupView(m[1]); else await homeView();
+    if (m) await groupView(m[1]);
+    else if (location.hash === '#/hesap') accountView();
+    else if (location.hash === '#/admin') await adminView();
+    else await homeView();
   } catch (e) {
     app.innerHTML = `<h1>Ortak Gider</h1><p class="error">${esc(e.message)}</p><p class="muted">Backend çalışıyor mu? (${esc(API)})</p><button id="retry">Tekrar dene</button>`;
     $('#retry').onclick = route;
