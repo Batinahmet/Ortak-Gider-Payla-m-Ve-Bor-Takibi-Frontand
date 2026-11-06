@@ -25,3 +25,7 @@ Giriş/kayıt, gruplarım ve davet koduyla katılma, grup sayfası (harcama ekle
 - **Hesabım (`#/hesap`):** e-posta ve rol bilgisi, ad değiştirme, şifre değiştirme (mevcut şifre istenir, diğer oturumlar kapanır), çıkış.
 - **Yönetim (`#/admin`):** kullanıcı listesi ve rol değiştirme. Bağlantı yalnızca yöneticide görünür, ama asıl koruma sunucudadır: yönetici olmayan biri adresi elle açsa bile sunucu 403 döner ve ekran hata mesajı gösterir.
 - Oturum belirteci `localStorage` içinde tutulur. Kullanıcıdan gelen tüm metinler `esc()` ile kaçırılarak basılır (XSS önlemi).
+
+## Grup üyeliği (Hafta 7)
+
+Grup sayfasında üye listesi, **Gruptan ayrıl** ve (sahip için) **Çıkar** ve **Grubu sil** düğmeleri vardır. Bakiyesi sıfır olmayan üyenin ayrılması gibi kurallar sunucuda uygulanır, arayüz sunucunun mesajını gösterir. "Ödedim" düğmesi yalnızca önerilen netleştirme tutarını gönderir.

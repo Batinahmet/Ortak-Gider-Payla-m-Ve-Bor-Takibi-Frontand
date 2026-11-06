@@ -154,8 +154,26 @@ async function groupView(gid) {
     <input id="file" type="file" accept="image/*"><button id="scan">Fişi oku</button><div id="scanout" class="muted"></div></section>
 
   <section class="card"><h2>🤖 Borç özeti</h2><button class="ghost" id="sum">Özet oluştur</button><div id="sumout" class="muted"></div></section>
+  <section class="card"><h2>Grup üyeleri</h2>${g.members.map((m) => `<div class="row"><span>${esc(nm(m.id))}${m.id === g.ownerId ? ' <span class="badge">sahip</span>' : ''}</span>
+    ${g.ownerId === me.id && m.id !== me.id ? `<button class="small ghost" data-kick="${esc(m.id)}">Çıkar</button>` : ''}</div>`).join('')}
+    <button class="ghost" id="leave">Gruptan ayrıl</button>
+    ${g.ownerId === me.id ? '<button class="ghost danger" id="delgroup">Grubu sil</button>' : ''}<div id="gerr"></div></section>
   <div id="live"></div>`;
 
+  // Üyelik yönetimi: kurallar (bakiye sıfır olmalı, sahip ayrılamaz) sunucuda uygulanır, mesajı gösteririz.
+  const memberAction = async (fn) => { try { await fn(); } catch (e) { showError($('#gerr'), e); } };
+  $('#leave').onclick = () => memberAction(async () => {
+    if (!confirm('Gruptan ayrılmak istediğine emin misin?')) return;
+    await api('DELETE', `/groups/${gid}/members/me`); location.hash = '#/';
+  });
+  app.querySelectorAll('[data-kick]').forEach((b) => { b.onclick = () => memberAction(async () => {
+    if (!confirm('Bu üyeyi gruptan çıkarmak istediğine emin misin?')) return;
+    await api('DELETE', `/groups/${gid}/members/${b.dataset.kick}`); groupView(gid);
+  }); });
+  if ($('#delgroup')) $('#delgroup').onclick = () => memberAction(async () => {
+    if (!confirm('Grup, tüm harcamaları ve ödemeleriyle birlikte silinecek. Emin misin?')) return;
+    await api('DELETE', `/groups/${gid}`); location.hash = '#/';
+  });
   $('#copy').onclick = () => { $('#link').select(); try { navigator.clipboard.writeText(inviteLink); } catch { document.execCommand('copy'); } };
 
   // Bölüşüm tipine göre kişi başı alan göster
